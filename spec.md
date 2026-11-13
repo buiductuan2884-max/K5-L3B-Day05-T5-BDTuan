@@ -4,7 +4,7 @@
 
 | Họ và Tên | Mã Học Viên | Việc đã làm |
 |---|---|---|
-| Bùi Đức Tuấn | ____ | Làm toàn bộ: kịch bản, khi AI sai, mức tự chủ, prototype, demo |
+| Bùi Đức Tuấn | 2A202603902 | Làm toàn bộ: kịch bản, khi AI sai, mức tự chủ, prototype, demo |
 
 ## §1. Lát cắt & phạm vi
 
