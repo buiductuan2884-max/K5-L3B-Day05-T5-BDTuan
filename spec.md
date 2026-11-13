@@ -1,6 +1,6 @@
 # Bài nộp LAB5 · T5 Ví điện tử · Nhóm BDTuan
 
-**Lớp:** L3B · **Bàn / zone:** ____ · **Track:** T5
+**Lớp:** L3B · **Track:** T5
 
 | Họ và Tên | Mã Học Viên | Việc đã làm |
 |---|---|---|
@@ -219,6 +219,6 @@ KB4: nếu màn hình vẫn có nút "Nhả giao dịch" hay "Tiếp tục thanh
 
 ## §7. Demo
 
-- Ca lạ nhận được ở demo: ____
-- Prototype đã làm gì: ____
-- Có đổi ý gì sau ca đó không: ____
+- **Ca lạ nhận được:** không có. Buổi này mình không demo trong zone, mà tham gia với vai người xem: đặt câu hỏi và đưa ca lạ cho nhóm T4 (thương mại điện tử).
+- **Prototype đã làm gì:** không chạy trên ca lạ nào. Để chuẩn bị, mình soạn sẵn cách trả lời ca lạ bằng 3 câu hỏi theo §4 (có người thứ ba giục không · việc được đòi có đảo được không · người nhắn có phải chủ ví đang đăng nhập không), áp cho 5 ca: chuyển nhầm tiền, shop giục chuyển cọc, người dùng gửi OTP, đòi mở khoá ví, người ở quầy viện phí lúc 22h.
+- **Có đổi ý gì không:** có một điều rút ra khi hỏi nhóm T4. Thiết kế của họ cho AI so sánh bằng chứng rồi gửi nhân viên, và câu hỏi "AI ghi 'không khớp' có phải là đang phân xử không?" cũng đúng với bài mình: màn hình tư vấn viên đang có dòng "Gợi ý của AI: giữ tiếp", dễ khiến tư vấn viên duyệt theo AI mà không tự kiểm. Bản sau nên để dòng đó sau phần bằng chứng, hoặc chỉ hiện sau khi tư vấn viên đã gọi lại xác minh.
