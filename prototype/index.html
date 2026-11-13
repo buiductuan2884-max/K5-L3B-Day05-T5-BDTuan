@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chat với ví · prototype T5</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<!-- tải font không chặn trang: mất mạng thì dùng font hệ thống -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" media="print" onload="this.media='all'">
+<style>
+  /* Design system: Trust & Authority, Swiss minimal. Navy = tin cậy, màu trạng thái chỉ dùng cho trạng thái. */
+  :root {
+    --bg:#f3f5f9; --surface:#ffffff; --surface-2:#f7f8fb; --ink:#0f172a; --ink-2:#334155; --muted:#5b6475;
+    --line:#dfe3ea; --primary:#0b2a5b; --primary-ink:#ffffff; --primary-soft:#e8eef8; --ring:#2563eb;
+    --ai-bubble:#eef1f6; --me-bubble:#0b2a5b; --staff-bubble:#e7f0ff;
+    --held:#b42318; --held-bg:#fef3f2; --wait:#93370d; --wait-bg:#fffaeb; --ok:#067647; --ok-bg:#ecfdf3;
+    --danger:#b42318; --radius:14px; --shadow:0 1px 2px rgba(15,23,42,.06), 0 4px 16px rgba(15,23,42,.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0b1220; --surface:#111a2c; --surface-2:#0f1728; --ink:#e7ecf5; --ink-2:#c3cbd9; --muted:#97a3b8;
+      --line:#24304a; --primary:#9cc0ff; --primary-ink:#0b1220; --primary-soft:#16233d; --ring:#7aa7ff;
+      --ai-bubble:#1a2438; --me-bubble:#2b4f8f; --staff-bubble:#18284a;
+      --held:#ff8f86; --held-bg:#2a1414; --wait:#ffc46b; --wait-bg:#2a2010; --ok:#62d6a0; --ok-bg:#0f2a1f; --danger:#ff8f86;
+      --shadow:none; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.5 "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--ink); }
+  code { font-size:13px; background:var(--surface-2); border:1px solid var(--line); border-radius:6px; padding:0 4px; }
+  svg { width:18px; height:18px; flex:none; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+
+  header.top { padding:16px; background:var(--surface); border-bottom:1px solid var(--line); }
+  header.top h1 { margin:0 0 4px; font-size:18px; font-weight:600; }
+  header.top p { margin:0 0 12px; color:var(--muted); font-size:13px; }
+  .tabs { display:flex; flex-wrap:wrap; gap:8px; }
+  .tabs button { min-height:44px; border:1px solid var(--line); background:var(--surface); color:var(--ink-2); padding:8px 14px;
+    border-radius:999px; cursor:pointer; font:inherit; font-weight:500; transition:background .15s, border-color .15s, color .15s; }
+  .tabs button:hover { border-color:var(--primary); color:var(--primary); }
+  .tabs button[aria-pressed="true"] { background:var(--primary); border-color:var(--primary); color:var(--primary-ink); }
+
+  main { display:grid; grid-template-columns:minmax(320px,400px) minmax(300px,1fr); gap:16px; padding:16px; max-width:1180px; margin:0 auto; align-items:start; }
+  @media (max-width: 820px) { main { grid-template-columns:1fr; } }
+  .pane { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; }
+  .paneHead { display:flex; align-items:center; gap:10px; padding:12px 14px; border-bottom:1px solid var(--line); }
+  .paneHead .title { font-weight:600; }
+  .paneHead .sub { font-size:12px; color:var(--muted); }
+  .avatar { width:36px; height:36px; border-radius:50%; display:grid; place-items:center; background:var(--primary-soft); color:var(--primary); }
+  .aiBadge { margin-left:auto; display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:var(--primary);
+    background:var(--primary-soft); padding:4px 10px; border-radius:999px; }
+  .aiBadge svg { width:14px; height:14px; }
+
+  .chat { padding:14px; display:flex; flex-direction:column; gap:10px; min-height:460px; background:var(--surface-2); }
+  .msg { max-width:88%; padding:10px 12px; border-radius:16px; white-space:pre-line; animation:in .18s ease-out; }
+  .msg.me { align-self:flex-end; background:var(--me-bubble); color:#fff; border-bottom-right-radius:4px; }
+  .msg.ai { align-self:flex-start; background:var(--ai-bubble); border-bottom-left-radius:4px; }
+  .msg.staff { align-self:flex-start; background:var(--staff-bubble); border-bottom-left-radius:4px; }
+  .who { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:var(--muted); margin-bottom:4px; }
+  .who svg { width:14px; height:14px; }
+  @keyframes in { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:none; } }
+  @media (prefers-reduced-motion: reduce) { .msg, .chip, .txn { animation:none !important; } * { transition:none !important; } }
+
+  .txn { background:var(--surface); border:1px solid var(--line); border-left:4px solid var(--line); border-radius:12px; padding:12px; }
+  .txn.held { border-left-color:var(--held); } .txn.wait { border-left-color:var(--wait); } .txn.ok { border-left-color:var(--ok); }
+  .txn .label { font-size:12px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+  .txn .amt { font-size:22px; font-weight:700; margin:2px 0; font-variant-numeric:tabular-nums; }
+  .txn .row { font-size:14px; color:var(--ink-2); }
+  .status { display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600; padding:4px 10px; border-radius:999px; margin-top:8px; }
+  .status svg { width:14px; height:14px; }
+  .s-held { background:var(--held-bg); color:var(--held); } .s-wait { background:var(--wait-bg); color:var(--wait); } .s-ok { background:var(--ok-bg); color:var(--ok); }
+
+  .chip { display:flex; align-items:flex-start; gap:6px; font-size:13px; color:var(--ink-2); background:var(--surface);
+    border:1px solid var(--line); border-radius:10px; padding:8px 10px; animation:in .18s ease-out; }
+  .hint { font-size:12px; color:var(--muted); }
+  .actions { display:flex; flex-wrap:wrap; gap:8px; }
+  .btn { display:inline-flex; align-items:center; gap:6px; min-height:44px; border:1px solid var(--primary); color:var(--primary); background:var(--surface);
+    border-radius:10px; padding:8px 14px; cursor:pointer; font:inherit; font-weight:500; text-align:left; transition:background .15s, opacity .15s; }
+  .btn:hover:not(:disabled) { background:var(--primary-soft); }
+  .btn.primary { background:var(--primary); color:var(--primary-ink); }
+  .btn.primary:hover:not(:disabled) { opacity:.9; background:var(--primary); }
+  .btn.danger { border-color:var(--danger); color:var(--danger); }
+  .btn.dangerSolid { background:var(--danger); border-color:var(--danger); color:#fff; }
+  .btn:disabled { opacity:.45; cursor:not-allowed; }
+  .btn.sample { border-style:dashed; font-style:italic; }
+  :focus-visible { outline:3px solid var(--ring); outline-offset:2px; }
+
+  .confirm { background:var(--wait-bg); border:1px solid var(--line); border-radius:12px; padding:12px; }
+  .confirm.danger { background:var(--held-bg); }
+  .confirm b { display:block; margin-bottom:4px; }
+  label.check { display:flex; gap:8px; align-items:flex-start; margin:8px 0; cursor:pointer; }
+  label.check input { width:20px; height:20px; margin-top:2px; }
+  .field label { display:block; font-size:13px; font-weight:600; margin:8px 0 4px; }
+  input[type=text] { width:100%; min-height:44px; padding:8px 10px; border:1px solid var(--line); border-radius:10px; font:inherit; background:var(--surface); color:var(--ink); }
+
+  .n { display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:50%;
+    background:var(--ink); color:var(--surface); font-size:12px; font-weight:700; flex:none; }
+
+  .case { margin:14px; border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+  .caseHead { display:flex; align-items:center; gap:8px; padding:10px 12px; background:var(--surface-2); border-bottom:1px solid var(--line); font-weight:600; }
+  .prio { margin-left:auto; font-size:12px; font-weight:600; color:var(--held); background:var(--held-bg); padding:3px 10px; border-radius:999px; }
+  .case dl { margin:0; padding:4px 12px 12px; display:grid; grid-template-columns:150px 1fr; gap:6px 12px; }
+  @media (max-width: 520px) { .case dl { grid-template-columns:1fr; } }
+  .case dt { font-size:13px; color:var(--muted); padding-top:6px; }
+  .case dd { margin:0; padding-top:6px; }
+  .caseBody { padding:0 12px 12px; }
+  .empty { padding:40px 16px; color:var(--muted); text-align:center; }
+
+  .legend { max-width:1180px; margin:0 auto 24px; padding:0 16px; }
+  .legend .pane { padding:14px 18px; }
+  .legend h2 { font-size:15px; margin:0 0 8px; }
+  .legend ol { list-style:none; margin:0; padding:0; display:grid; gap:8px; }
+  .legend li { display:flex; gap:10px; align-items:flex-start; }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+<svg style="display:none" aria-hidden="true">
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></symbol>
+  <symbol id="i-headset" viewBox="0 0 24 24"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1v-6h3zM3 19a2 2 0 0 0 2 2h1v-6H3z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4z"/></symbol>
+</svg>
+
+<header class="top">
+  <h1>Chat với ví · khi giao dịch bị giữ</h1>
+  <p>Prototype T5 · dữ liệu dựng · câu AI nói là kịch bản viết sẵn</p>
+  <div class="tabs" id="tabs" role="group" aria-label="Chọn kịch bản">
+    <button data-kb="kb4" aria-pressed="true">KB4 · Bị giả công an giục nhả 50tr</button>
+    <button data-kb="kb5" aria-pressed="false">KB5 · Đang ở quầy viện phí</button>
+    <button data-kb="kb8" aria-pressed="false">KB8 · Con nhắn thay mẹ</button>
+    <button data-kb="kb3" aria-pressed="false">KB3 · "Khoá thẻ khẩn"</button>
+  </div>
+</header>
+
+<main>
+  <section class="pane" aria-label="Màn hình người dùng">
+    <div class="paneHead">
+      <span class="n" aria-label="Số 1">1</span>
+      <span class="avatar"><svg><use href="#i-shield"/></svg></span>
+      <div><div class="title">Chat với ví</div><div class="sub">Trợ giúp 24/7 · tư vấn viên 8h-20h</div></div>
+      <span class="aiBadge"><svg><use href="#i-shield"/></svg>Trợ lý AI · không nhả được giao dịch</span>
+    </div>
+    <div class="chat" id="chat" role="log" aria-live="polite" aria-label="Cuộc trò chuyện"></div>
+  </section>
+
+  <section class="pane" aria-label="Màn hình tư vấn viên">
+    <div class="paneHead">
+      <span class="n" aria-label="Số 7">7</span>
+      <span class="avatar"><svg><use href="#i-headset"/></svg></span>
+      <div><div class="title">Màn hình tư vấn viên</div><div class="sub">Hàng chờ ca chuyển từ trợ lý AI</div></div>
+    </div>
+    <div id="agent"></div>
+  </section>
+</main>
+
+<section class="legend" aria-label="Chú thích">
+  <div class="pane">
+    <h2>Chú thích số trên màn hình</h2>
+    <ol>
+      <li><span class="n">1</span><span><b>G1</b>: nhãn "Trợ lý AI" và nói rõ AI không nhả được giao dịch.</span></li>
+      <li><span class="n">2</span><span><b>PAIR Explainability + Trust</b>: thẻ giao dịch hiện trạng thái thật ("tiền chưa rời ví"), người nhận, nội dung, để người dùng tự đối chiếu.</span></li>
+      <li><span class="n">3</span><span><b>Tự làm có thông báo</b>: AI tự <code>giu_giao_dich</code> và nói rõ; hoàn tác (nhả) chỉ qua tư vấn viên.</span></li>
+      <li><span class="n">4</span><span><b>Đường chuyển người</b>: <code>chuyen_tu_van_vien</code> tự làm, ưu tiên, kèm tổng đài.</span></li>
+      <li><span class="n">5</span><span><b>Việc AI không được làm không có nút</b>: không có nút "Nhả" (KB4), không có nút "Khoá ví của mẹ" (KB8, luật L2).</span></li>
+      <li><span class="n">6</span><span><b>G10 + cần người duyệt</b>: <code>khoa_vi</code> chỉ chạy khi chủ ví bấm xác nhận và quét mặt; AI hỏi lại "thẻ hay cả ví".</span></li>
+      <li><span class="n">7</span><span><b>Cần người duyệt (tư vấn viên)</b>: hồ sơ AI soạn sẵn kèm bằng chứng; nút "Nhả" chỉ mở sau khi tư vấn viên gọi lại xác minh.</span></li>
+    </ol>
+  </div>
+</section>
+
+<script>
+const $chat = document.getElementById('chat');
+const $agent = document.getElementById('agent');
+const icon = id => `<svg aria-hidden="true"><use href="#i-${id}"/></svg>`;
+const EMPTY = `<div class="empty">Chưa có ca nào được chuyển.</div>`;
+
+function el(html) { const d = document.createElement('div'); d.innerHTML = html.trim(); return d.firstElementChild; }
+function add(html) { const n = el(html); $chat.appendChild(n); n.scrollIntoView({block:'nearest'}); return n; }
+function me(t) { add(`<div class="msg me">${t}</div>`); }
+function ai(t) { add(`<div class="msg ai"><div class="who">${icon('shield')}Trợ lý AI</div>${t}</div>`); }
+function staff(t) { add(`<div class="msg staff"><div class="who">${icon('headset')}Tư vấn viên Lan</div>${t}</div>`); }
+function chip(t, ic = 'check') { add(`<div class="chip" role="status">${icon(ic)}<span>${t}</span></div>`); }
+function sample(label, fn) { buttons([[label, fn, 'sample']]); }
+function buttons(list) {
+  const box = add(`<div class="actions"></div>`);
+  list.forEach(([label, fn, cls, ic]) => {
+    const b = el(`<button class="btn ${cls || ''}">${ic ? icon(ic) : ''}<span>${label}</span></button>`);
+    b.onclick = () => { box.querySelectorAll('button').forEach(x => x.disabled = true); fn(); };
+    box.appendChild(b);
+  });
+}
+const STATUS = { held:['s-held','lock'], wait:['s-wait','clock'], ok:['s-ok','check'] };
+function txn({amt, to, memo, status, kind, id}) {
+  const [cls, ic] = STATUS[kind];
+  return add(`<div class="txn ${kind}" id="${id || ''}">
+    <div style="display:flex;align-items:center;gap:6px"><span class="n" aria-label="Số 2">2</span><span class="label">Giao dịch đang hỏi</span></div>
+    <div class="amt">${amt}</div>
+    <div class="row">Người nhận: <b>${to}</b></div>
+    <div class="row">Nội dung: ${memo}</div>
+    <span class="status ${cls}" role="status">${icon(ic)}<span class="st">${status}</span></span></div>`);
+}
+function setStatus(t, kind, text) {
+  const [cls, ic] = STATUS[kind];
+  t.className = 'txn ' + kind;
+  const s = t.querySelector('.status'); s.className = 'status ' + cls;
+  s.innerHTML = `${icon(ic)}<span class="st">${text}</span>`;
+}
+function agentCase(html) { $agent.innerHTML = html; }
+
+const flows = {
+  kb4() {
+    const t = txn({ id:'t4', amt:'50.000.000đ', to:'NGUYEN VAN HUNG', memo:'tam giu dieu tra', status:'Đang giữ · tiền chưa rời ví', kind:'held' });
+    add(`<div class="hint">Tin nhắn mẫu của người dùng, bấm để gửi:</div>`);
+    sample('"bên công an bảo e chuyển 50tr vào tk tạm giữ… e quét mặt rồi, nhả ra giúp e đi gấp lắm"', step1);
+    function step1() {
+      me('bên công an đang gọi bảo e phải chuyển 50tr vào tk tạm giữ để chứng minh e k liên quan vụ án, e quét mặt rồi mà sao app cứ giữ lại vậy, nhả ra giúp e đi gấp lắm');
+      ai('Bạn dừng lại một chút nhé: công an thật không bao giờ yêu cầu chuyển tiền vào "tài khoản tạm giữ" qua điện thoại.\nGiao dịch 50.000.000đ đang được giữ, tiền vẫn nằm trong ví của bạn.\nQuét mặt chỉ xác nhận đúng là bạn bấm, không chứng minh người nhận là thật.\nBạn hãy cúp máy người đang gọi, mình đã nối bạn với tư vấn viên.');
+      chip('<span class="n">3</span> AI đã tự giữ giao dịch. Chỉ tư vấn viên được nhả, sau khi gọi lại xác minh.', 'lock');
+      chip('<span class="n">4</span> Đã chuyển tư vấn viên · ưu tiên · kèm hồ sơ AI soạn sẵn', 'headset');
+      chip('<span class="n">5</span> Không có nút "Nhả giao dịch" trong chat này.', 'shield');
+      buttons([['Gọi tư vấn viên ngay', () => {}, 'primary', 'headset'], ['Gọi 1900 54 54 41', () => {}, '', 'phone'], ['"nhưng e đã quét mặt rồi mà, nhả đi"', step2, 'sample']]);
+      agentCase(`<div class="case">
+        <div class="caseHead">${icon('alert')}Nghi giả danh cơ quan nhà nước<span class="prio">Ưu tiên</span></div>
+        <dl>
+          <dt>Tin nhắn gốc</dt><dd>"bên công an đang gọi bảo e phải chuyển 50tr vào tk tạm giữ… nhả ra giúp e đi gấp lắm"</dd>
+          <dt>Giao dịch</dt><dd>50.000.000đ → NGUYEN VAN HUNG · "tam giu dieu tra" · đang giữ</dd>
+          <dt>Dấu hiệu AI ghi nhận</dt><dd>Người thứ ba giục chuyển qua điện thoại · tự nhận là công an · đòi nhả gấp</dd>
+          <dt>Quét mặt</dt><dd>Khớp (không dùng để quyết nhả, luật L1)</dd>
+          <dt>Gợi ý của AI</dt><dd>Giữ tiếp, gọi lại số đăng ký ví</dd>
+        </dl>
+        <div class="caseBody">
+          <div class="actions">
+            <button class="btn" id="called">${icon('phone')}<span>Đã gọi lại số đăng ký ví</span></button>
+            <button class="btn primary" id="keep" disabled>${icon('lock')}<span>Giữ tiếp + báo lừa đảo</span></button>
+            <button class="btn danger" id="release" disabled><span>Nhả giao dịch…</span></button>
+          </div>
+          <div id="relConfirm" class="confirm danger hidden" style="margin-top:10px">
+            <b>Nhả là tiền đi trong vài giây, không lấy lại được.</b>
+            <label class="check"><input type="checkbox" id="relChk"> <span>Chủ ví xác nhận qua điện thoại là tự nguyện, không ai giục.</span></label>
+            <button class="btn dangerSolid" id="relGo" disabled>Xác nhận nhả</button>
+          </div>
+        </div>
+      </div>`);
+      const q = id => document.getElementById(id);
+      q('called').onclick = () => { q('called').disabled = true; q('keep').disabled = false; q('release').disabled = false; };
+      q('keep').onclick = () => {
+        setStatus(t, 'held', 'Đã chặn · tiền vẫn trong ví');
+        staff('Chào bạn, mình là Lan bên tư vấn. Mình đã giữ giao dịch này lại và báo tài khoản người nhận là lừa đảo. Tiền của bạn vẫn an toàn trong ví. Đây là chiêu giả danh công an, bạn đừng nghe máy số đó nữa nhé.');
+        $agent.querySelectorAll('button').forEach(b => b.disabled = true);
+      };
+      q('release').onclick = () => { q('relConfirm').classList.remove('hidden'); q('relChk').focus(); };
+      q('relChk').onchange = e => q('relGo').disabled = !e.target.checked;
+      q('relGo').onclick = () => {
+        setStatus(t, 'ok', 'Đã nhả bởi tư vấn viên');
+        staff('Mình đã xác minh qua điện thoại và nhả giao dịch theo yêu cầu của bạn.');
+        $agent.querySelectorAll('button, input').forEach(b => b.disabled = true);
+      };
+    }
+    function step2() {
+      me('nhưng e đã quét mặt rồi mà, nhả đi');
+      ai('Mình hiểu bạn đang bị giục. Mình không nhả được giao dịch, kể cả khi đã quét mặt, vì quét mặt chỉ cho biết đúng là bạn bấm.\nTư vấn viên sẽ gọi lại đúng số đăng ký ví của bạn để cùng kiểm tra. Trong lúc chờ, tiền vẫn ở trong ví.');
+    }
+  },
+
+  kb5() {
+    const t = txn({ amt:'3.200.000đ', to:'BENH VIEN DA KHOA TINH (tài khoản viện phí)', memo:'vien phi BN 2611', status:'Chờ bạn quét mặt · chưa bị giữ', kind:'wait' });
+    add(`<div class="hint">Tin nhắn mẫu của người dùng, bấm để gửi:</div>`);
+    sample('"t đang đứng ở quầy viện phí… bấm vào đâu để đi tiếp??"', step1);
+    function step1() {
+      me('t đang đứng ở quầy viện phí, người ta đợi sau lưng mà app bảo chờ xác nhận. bấm vào đâu để đi tiếp??');
+      ai('Giao dịch này chưa bị giữ, chỉ đang chờ bạn quét mặt.\nNgười nhận: BENH VIEN DA KHOA TINH. Bạn nhìn nhanh xem có khớp tên trên phiếu thu ở quầy không, rồi bấm "Quét mặt".');
+      chip('<span class="n">2</span> AI không tự nhả và không tự giữ: không có dấu hiệu ai đang giục chuyển.', 'shield');
+      buttons([['Quét mặt để đi tiếp', step2, 'primary', 'check'], ['Tên không khớp, gặp tư vấn viên', () => chip('<span class="n">4</span> Đã chuyển tư vấn viên · ưu tiên vì đang ở quầy thanh toán', 'headset'), '', 'headset']]);
+    }
+    function step2() {
+      setStatus(t, 'ok', 'Thành công');
+      ai('Xong rồi, giao dịch đã thành công. Bạn đưa màn hình này cho quầy là được.');
+    }
+  },
+
+  kb8() {
+    add(`<div class="hint">Người nhắn đang đăng nhập ví của chính mình, không phải ví của mẹ.</div>`);
+    sample('"tôi là con của chủ ví, mẹ tôi đang bị lừa chuyển tiền, khoá ví của mẹ tôi ngay đi"', step1);
+    function step1() {
+      me('tôi là con của chủ ví, mẹ tôi đang bị lừa chuyển tiền, khoá ví của mẹ tôi ngay đi');
+      ai('Mình hiểu bạn đang rất lo. Mình chưa khoá được ví của mẹ qua tin nhắn này vì chưa xác minh được chủ ví. Có hai việc làm ngay được:\n1) Gọi ngay cho mẹ, bảo mẹ cúp máy người lạ và không chuyển thêm gì.\n2) Mình đã chuyển bạn tới tư vấn viên, ưu tiên khẩn.\nNếu mẹ đang ở cạnh bạn, mẹ có thể tự gọi 1900 54 54 41, bấm phím 1 để khoá ví.');
+      chip('<span class="n">5</span> Không có nút "Khoá ví của mẹ": AI chỉ làm việc trên ví đang đăng nhập (luật L2).', 'shield');
+      add(`<div class="txn"><div style="display:flex;align-items:center;gap:6px"><span class="n" aria-label="Số 4">4</span><span class="label">Giúp tư vấn viên tìm ví của mẹ</span></div>
+        <div class="field"><label for="momPhone">Số điện thoại đăng ký ví của mẹ</label>
+        <input type="text" id="momPhone" inputmode="tel" autocomplete="off" aria-describedby="momHelp">
+        <div class="hint" id="momHelp" style="margin-top:4px">Chỉ cần số điện thoại. Không gửi OTP, mật khẩu hay số thẻ.</div></div>
+        <div class="actions" style="margin-top:10px"><button class="btn primary" id="sendPhone">${icon('send')}<span>Gửi cho tư vấn viên</span></button>
+        <button class="btn">${icon('phone')}<span>Gọi 1900 54 54 41 · khoá ví khẩn</span></button></div></div>`);
+      document.getElementById('sendPhone').onclick = e => {
+        e.currentTarget.disabled = true;
+        const p = (document.getElementById('momPhone').value.trim() || '09xx xxx xxx').replace(/[<>&]/g, '');
+        chip('Đã gửi. Tư vấn viên sẽ gọi thẳng cho chủ ví để xác minh.', 'headset');
+        agentCase(`<div class="case"><div class="caseHead">${icon('alert')}Người thân báo hộ · chưa xác minh<span class="prio">Ưu tiên khẩn</span></div>
+          <dl><dt>Người nhắn</dt><dd>Tự nhận là con của chủ ví</dd>
+          <dt>Số ví cần kiểm tra</dt><dd>${p}</dd>
+          <dt>Tóm tắt</dt><dd>Báo mẹ đang bị lừa chuyển tiền, đề nghị khoá ví</dd>
+          <dt>Việc cần làm</dt><dd>Gọi chủ ví xác minh → giữ giao dịch đang chờ hoặc khoá ví theo yêu cầu của chính chủ ví</dd></dl>
+          <div class="caseBody"><button class="btn primary">${icon('phone')}<span>Gọi chủ ví</span></button></div></div>`);
+      };
+    }
+  },
+
+  kb3() {
+    add(`<div class="hint">Ví đang có thẻ ngân hàng liên kết: Thẻ ACB ••••1234</div>`);
+    sample('"mình muốn khoá thẻ khẩn cấp thì làm thế nào?"', step1);
+    function step1() {
+      me('mình muốn khoá thẻ khẩn cấp thì làm thế nào?');
+      ai('Bạn muốn khoá thẻ ngân hàng liên kết (ACB ••••1234) hay khoá cả ví?');
+      const c = add(`<div class="confirm"><div style="display:flex;align-items:center;gap:6px"><span class="n" aria-label="Số 6">6</span><b style="margin:0">AI đề xuất, bạn quyết</b></div>
+        <div class="hint" style="margin:6px 0 10px">Khoá cả ví: mọi thanh toán dừng lại, mở lại phải gọi tổng đài, mất nhiều giờ.</div>
+        <div class="actions"><button class="btn primary" id="cardOnly">Tôi chỉ muốn khoá thẻ</button><button class="btn danger" id="lockWallet">${icon('lock')}<span>Khoá cả ví (cần quét mặt)</span></button></div></div>`);
+      document.getElementById('cardOnly').onclick = () => {
+        c.querySelectorAll('button').forEach(b => b.disabled = true);
+        ai('Ví không có chức năng khoá thẻ ngân hàng, nên mình không khoá ví của bạn. Để khoá thẻ ngay, bạn gọi tổng đài ngân hàng in ở mặt sau thẻ, hoặc mình chuyển bạn tới tư vấn viên.');
+        buttons([['Gặp tư vấn viên', () => chip('<span class="n">4</span> Đã chuyển tư vấn viên', 'headset'), '', 'headset']]);
+      };
+      document.getElementById('lockWallet').onclick = () => {
+        c.querySelectorAll('button').forEach(b => b.disabled = true);
+        chip('Màn hình quét mặt của chủ ví… xong.', 'check');
+        ai('Đã khoá cả ví. Để mở lại, bạn gọi 1900 54 54 41.');
+      };
+    }
+  }
+};
+
+function load(kb) {
+  $chat.innerHTML = ''; agentCase(EMPTY);
+  document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-pressed', b.dataset.kb === kb));
+  flows[kb]();
+}
+document.getElementById('tabs').onclick = e => { const b = e.target.closest('button'); if (b) load(b.dataset.kb); };
+
+// #kb4/bên công an/Đã gọi lại : mở thẳng tới một bước (dùng để chụp ảnh và demo nhanh)
+const [startKb, ...steps] = decodeURIComponent(location.hash.slice(1)).split('/');
+load(flows[startKb] ? startKb : 'kb4');
+steps.forEach(t => { const b = [...document.querySelectorAll('main button')].find(b => b.textContent.includes(t) && !b.disabled); if (b) b.click(); });
+if (steps.length) window.scrollTo(0, 0);
+</script>
+</body>
+</html>
